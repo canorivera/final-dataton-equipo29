@@ -1,0 +1,62 @@
+---
+title: "final_dataton"
+author: "equipo 29"
+date: "2024-10-29"
+output: html_document
+---
+
+```{R}
+#paquetes y datos
+pacman::p_load(tidyverse, fixest, ggplot2, sf, janitor, readxl, broom, nnls)
+
+#precios
+precios_22 = read.csv("C:/Users/luism/Documents/final_dataton/data/precios_22.csv")
+#enighs
+gasto_hogar_2022 = read_csv("C:/Users/luism/Documents/final_dataton/data/enigh/2022/gastoshogar.csv")
+concentrado_hogar_2022 = read_csv("C:/Users/luism/Documents/final_dataton/data/enigh/2022/concentradohogar.csv")
+lista_mun_antad <- read_csv("C:/Users/luism/Documents/final_dataton/output/lista_mun_antad.csv")
+
+
+```
+
+```{R}
+####agrupamos
+# promedio de consumo
+promedios_municipio_lugar = gasto_hogar_2022 |> left_join(concentrado_hogar_2022) |> filter(lugar_comp != 0) |> mutate(internet = lugar_comp == 18, clave=substr(clave,1,1)) |> group_by(ubica_geo, internet, clave) |> summarise(cantidad_promedio = mean(cantidad), gasto_promedio = mean(gasto), ingcor_promedio = mean(ing_cor)) |> mutate(costo_promedio = gasto_promedio/cantidad_promedio)|>ungroup()
+
+precios_22$Precio.promedio = as.numeric(precios_22$Precio.promedio)
+
+#preciospromedio
+
+precio_promedio = precios_22  %>% mutate(Precio.promedio = as.numeric(Precio.promedio)) %>% filter(!is.na(Precio.promedio)) %>% group_by(Grupo) %>% summarise(precio_medio=mean(Precio.promedio)) %>% ungroup()
+precio_promedio$clave = c("A","A","H","H","H","G","F","F","K","C","J","D","B","M","E","L","N")
+
+promedios_municipio_lugar = left_join(promedios_municipio_lugar, precio_promedio)
+
+#se los metemos al promedios
+
+promedios_municipio_lugar = promedios_municipio_lugar %>% mutate(costo_promedio = ifelse(is.na(costo_promedio), precio_medio,costo_promedio), cantidad_promedio = ifelse(is.na(cantidad_promedio), gasto_promedio / costo_promedio, cantidad_promedio), gasto_promedio=ifelse(is.na(gasto_promedio), cantidad_promedio*costo_promedio,gasto_promedio), mun_int=ifelse(internet,paste("int",ubica_geo,sep=""), paste("fis",ubica_geo,sep=""))) %>% filter(!((is.na(cantidad_promedio)| is.na(gasto_promedio )))) %>% filter(internet == T)
+
+write.csv(promedios_municipio_lugar,file = "C:/Users/luism/Documents/final_dataton/output/promedios_mun.csv")
+
+
+```
+
+```{R}
+#regresiones
+reg_cd=feols(log(ingcor_promedio) ~ log(cantidad_promedio) | ubica_geo,
+             data=promedios_municipio_lugar, split=~ubica_geo)
+coeficientes <- coeftable(reg_cd)
+filt = coeficientes %>%
+  filter(Estimate<1 & Estimate>0.05 & is.na(`Std. Error`)==F & coefficient!="(Intercept)") %>% select(sample, Estimate) %>% rename(mkey=sample)
+
+lista_mun_antad$mkey = paste(sprintf("%02d", lista_mun_antad$`Clave entidad`),sprintf("%03d",lista_mun_antad$`Clave municipio`),sep="")
+filt= inner_join(lista_mun_antad, filt, by="mkey")
+
+
+
+
+write.csv(filt,file = "C:/Users/luism/Documents/final_dataton/output/filt_final.csv")
+
+
+```

@@ -1,0 +1,27 @@
+---
+title: "gastos"
+author: "Maria, Gus, Luis & Cano"
+date: "2024-10-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Cargamos los paquetes que requerimos
+if (!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(readr, dplyr, tidyverse, fixest)
+
+```
+
+```{R}
+read = function(filename){
+  df = fread(filename) |> janitor::clean_names() 
+}
+
+gastos2022 = read("..")
+
+```
+

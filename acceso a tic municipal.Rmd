@@ -1,0 +1,156 @@
+---
+title: "acceso a TIC"
+author: "Maria"
+date: "2024-10-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+options(scipen = 999)
+
+install.packages("dplyr", "ggplot2", "sf", "tidyr", "stringr")
+library(dplyr)
+library(sf)
+library( ggplot2)
+library(tidyr)
+library(stringr)
+
+```
+# Carga bases
+```{r}
+censo <- read.csv('../raw/censo.csv')
+censo <- censo %>% rename(sintic = VPH_SINTIC, siwifi = VPH_SPMVPI, sinpcniwifi = VPH_SINCINT, conwifi = VPH_INTER)
+
+censo_f <- censo %>% select(sintic, siwifi, sinpcniwifi, conwifi, MUN, ENTIDAD, POBTOT, NOM_MUN)
+
+censo_f <- censo_f[-(1:8), ]
+
+
+sf_mun <- st_read("../raw/shp/mun21gw.shp")
+```
+# Estandariza mun y ent y crea CVEGEO
+
+```{r}
+censo_f$MUN <- sprintf("%03d", as.numeric(censo_f$MUN))
+censo_f$ENTIDAD <- sprintf("%02d", as.numeric(censo_f$ENTIDAD))
+```
+Crea CVEGEO a partir de MUN y ENT
+```{r}
+
+censo_f$CVEGEO <- paste(censo_f$ENTIDAD, censo_f$MUN)
+
+class(censo_f$CVEGEO) 
+class(sf_mun$CVEGEO) 
+
+censo_f$CVEGEO <- gsub(" ", "", censo_f$CVEGEO)
+
+
+```
+
+# Haz la suma de las variables por CVEGEO
+```{r}
+
+censo_f <- censo_f %>%
+  filter(!if_any(everything(), ~ str_detect(., "Total del Municipio") | str_detect(., "Total de la entidad")))
+
+censo_f <- censo_f %>%
+  mutate(
+    sinpcniwifi = as.numeric(sinpcniwifi),
+    conwifi = as.numeric(conwifi),
+    sintic = as.numeric(sintic),
+    CVEGEO = as.numeric(CVEGEO)
+  )
+
+
+censo_f_summary <- censo_f %>%
+  group_by(CVEGEO) %>%
+  summarize(
+    sinpcniwifi_sum = sum(sinpcniwifi, na.rm = TRUE),   
+    conwifi_sum = sum(conwifi, na.rm = TRUE),            
+    sintic_sum = sum(sintic, na.rm = TRUE),
+     POBTOT = sum(POBTOT, na.rm = TRUE), 
+  )
+
+censo_f_summary$CVEGEO <- sprintf("%05d", as.numeric(censo_f_summary$CVEGEO))
+
+
+```
+# Hacer porcentajes 
+```{r}
+censo_pob <- censo_f_summary %>% select(POBTOT, sinpcniwifi_sum, sintic_sum, conwifi_sum, CVEGEO)
+censo_pob <- censo_f_summary %>%
+  mutate(
+    por_sinpcniwifi = (sinpcniwifi_sum / POBTOT) * 100,  
+    por_sintic= (sintic_sum / POBTOT) * 100,             
+    por_conwifi = (conwifi_sum / POBTOT) * 100            
+  )
+
+
+```
+
+# mapa base
+```{r}
+
+Sys.setenv(OGR_GEOMETRY_ACCEPT_UNCLOSED_RING = "NO")
+
+ggplot()+
+geom_sf(data = sf_mun,
+color = "grey",
+fill = "white",
+size = 0.1) + theme_classic()
+
+```
+# MERGE
+```{r}
+mapadata <- left_join(sf_mun, censo_pob, by = "CVEGEO")
+
+```
+
+```{r}
+# Mapa sin usar breaks
+mapa_sinpcniwifi <- ggplot(data = mapadata) +
+  geom_sf(aes(fill = por_sinpcniwifi)) + 
+  scale_fill_viridis_c(name = "Sin Wifi ni PC", option = "plasma", na.value = "grey50") +
+  labs(title = "Mapa de acceso a Wifi y PC",
+       subtitle = "Porcentaje de poblacion con acceso a WiFi y computadoras por Municipio") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"), 
+        plot.background = element_rect(fill = "white"))
+
+# Guardar el mapa
+ggsave("../output/mapa_sinpcniwifi.png", plot = mapa_sinpcniwifi, width = 10, height = 8, dpi = 600)
+
+```
+#SIN TICS
+```{r}
+# Mapa sin usar breaks
+mapa_sintic <- ggplot(data = mapadata) +
+  geom_sf(aes(fill = por_sintic)) + 
+  scale_fill_viridis_c(name = "Sin acceso a TICS", option = "plasma", na.value = "grey50") +
+  labs(title = "Mapa de no acceso a TICS",
+       subtitle = "Porcentage de hogares sin acceso a TICS por municipio") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"), 
+        plot.background = element_rect(fill = "white"))
+
+# Guardar el mapa
+ggsave("../output/mapa_sintic.png", plot = mapa_sintic, width = 10, height = 8, dpi = 600)
+```
+#CON WIFI
+```{r}
+# Mapa sin usar breaks
+mapaconwifi <- ggplot(data = mapadata) +
+  geom_sf(aes(fill = por_conwifi)) + 
+  scale_fill_viridis_c(name = "Hogares con acceso a wifi", option = "plasma", na.value = "grey50") +
+  labs(title = "Mapa de acceso a wifi",
+       subtitle = "Porcentage de de hogares con acceso a wifi por municipio") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"), 
+        plot.background = element_rect(fill = "white"))
+
+# Guardar el mapa
+ggsave("../output/mapa_wifi.png", plot = mapaconwifi, width = 10, height = 8, dpi = 600)
+```
+

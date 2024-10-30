@@ -1,0 +1,116 @@
+---
+title: "DT2 - Distribuicion"
+author: "Maria"
+date: "2024-10-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(renv)
+renv::install(c("dplyr", "ggplot2", "sf", "ggplot2", "knitr", "tidyr", "readr"))
+
+packages <- c("dplyr", "ggplot2", "sf", "knitr", "tidyr", "readr")
+
+lapply(packages, library, character.only = TRUE)
+```
+
+
+```{r}
+Dist <- read.csv("raw/Denue_distribuidoras.csv",  fileEncoding = "Latin1")
+```
+
+## Separar para codigos del SCIAN 493111, 493119, 493130, 493120)
+
+```{r}
+Dist_almacenes <- Dist %>% 
+  filter(codigo_act %in% c("493119", "493130", "493120", "493111"))
+```
+
+```{r}
+Dist_alm_general <- Dist_almacenes %>% filter(codigo_act == "493111")
+
+Dist_alm_refri <-  Dist_almacenes %>% filter(codigo_act == "493120")
+
+
+Dist_alm_norefri <-  Dist_almacenes %>% filter(codigo_act == "493130")
+
+```
+
+## Mapa
+
+```{r}
+Sys.setenv(OGR_GEOMETRY_ACCEPT_UNCLOSED_RING = "NO")
+
+shapefile <- st_read("raw/mun21gw.shp")
+
+
+```
+
+```{r}
+ggplot()+
+geom_sf(data = shapefile,
+color = "grey",
+fill = "white",
+size = 0.1) + theme_classic()
+```
+## Mapa de refrigerados
+```{r}
+maparefri <- ggplot() +
+  geom_sf(data = shapefile, fill = "white", color = "grey") +  
+  geom_point(data = Dist_alm_refri, aes(x = longitud, y = latitud), 
+             color = "darkorchid1", size = 0.1, alpha = 0.7) +  # Puntos de los hospitales
+  labs(title = "Centros de Dsitribuicion de productos refrigerados", x = "Longitud", y = "Latitud")
+
+print(maparefri)
+
+ggsave(filename = "maparefri.png", 
+       plot = maparefri, 
+       width = 10,   
+       height = 7,   
+       dpi = 600,    
+       device = "png")
+
+
+
+```
+##Mapa de alimentos no refrigerados
+```{r}
+mapanorefri <- ggplot() +
+  geom_sf(data = shapefile, fill = "white", color = "grey") +  
+  geom_point(data = Dist_alm_norefri, aes(x = longitud, y = latitud), 
+             color = "blue", size = 0.1, alpha = 0.7) +  # Puntos de los hospitales
+  labs(title = "Centros de Dsitribuicion de alimentos no refrigerados", x = "Longitud", y = "Latitud")
+
+print(mapanorefri)
+
+ggsave(filename = "mapanorefri.png", 
+       plot = mapanorefri, 
+       width = 10,   
+       height = 7,   
+       dpi = 600,    
+       device = "png")
+
+
+
+```
+
+##Mapa centro de almacenamiento general 
+```{r}
+mapa_almacenamiento_gen <- ggplot() +
+  geom_sf(data = shapefile, fill = "white", color = "grey") +  
+  geom_point(data = Dist_alm_general, aes(x = longitud, y = latitud), 
+             color = "hotpink", size = 0.1, alpha = 0.7) +  # Puntos de los hospitales
+  labs(title = "Centros de almacenamiento generales ", x = "Longitud", y = "Latitud")
+
+print(mapa_almacenamiento_gen)
+
+ggsave(filename = "mapa_almacenamiento_gen.png", 
+       plot = mapa_almacenamiento_gen, 
+       width = 10,   
+       height = 7,   
+       dpi = 600,    
+       device = "png")
+
+
+
+```
